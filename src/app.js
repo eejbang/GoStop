@@ -66,8 +66,8 @@ function sound(kind = 'play') {
   } catch { /* 오디오를 지원하지 않는 브라우저 */ }
 }
 
-function cardHTML(card, { disabled = true, className = '', action = '', key = '', label = '' } = {}) {
-  return `<button type="button" class="flower-card ${className}" ${disabled ? 'disabled' : ''} data-id="${card.id}" data-month="${card.month}" ${action ? `data-action="${action}"` : ''} title="${escape(card.name)}" aria-label="${escape(card.name + label)}">${cardSVG(card)}${key ? `<span class="card-key" aria-hidden="true">${key}</span>` : ''}</button>`;
+function cardHTML(card, { disabled = true, className = '', action = '', key = '', label = '', badge = '' } = {}) {
+  return `<button type="button" class="flower-card ${className}" ${disabled ? 'disabled' : ''} data-id="${card.id}" data-month="${card.month}" ${action ? `data-action="${action}"` : ''} title="${escape(card.name)}" aria-label="${escape(card.name + label)}">${cardSVG(card)}${key ? `<span class="card-key" aria-hidden="true">${key}</span>` : ''}${badge ? `<span class="card-badge" aria-hidden="true">${badge}</span>` : ''}</button>`;
 }
 
 function renderFloor() {
@@ -120,15 +120,17 @@ function renderFloor() {
 
 function renderHand() {
   const s = game.state, available = started && !animating && s.turn === 0 && s.phase === 'playing' && !modal.open;
+  const bombs = started ? game.bombOptions(0) : [];
   $('#hand-count').textContent = `${s.hands[0].length}장${s.passes[0] ? ` + 뒤집기 ${s.passes[0]}` : ''}`;
   $('#hand').classList.toggle('muted', !available);
   $('#hand').innerHTML = s.hands[0].map((c, i) => {
     const matches = s.table.some(t => t.month === c.month);
     const shaken = started && s.shaken[0].includes(c.month);
-    return cardHTML(c, { disabled: !available, action: 'play', key: i === 9 ? '0' : String(i + 1), className: `${matches && available ? 'match-card' : ''} ${hintId === c.id ? 'hinted' : ''} ${shaken ? 'shaken-card' : ''}`, label: `${matches ? ' · 바닥에 같은 무늬 있음' : ''}${shaken ? ' · 자동 흔들기 적용' : ''}` });
+    const bomb = bombs.includes(c.month);
+    return cardHTML(c, { disabled: !available, action: 'play', key: i === 9 ? '0' : String(i + 1), className: `${matches && available ? 'match-card' : ''} ${hintId === c.id ? 'hinted' : ''} ${shaken ? 'shaken-card' : ''} ${bomb ? 'bomb-card' : ''}`, badge: bomb ? '폭탄 가능' : '', label: `${matches ? ' · 바닥에 같은 무늬 있음' : ''}${shaken ? ' · 자동 흔들기 적용' : ''}${bomb ? ' · 세 장 폭탄 선택 가능' : ''}` });
   }).join('') + (s.passes[0] ? `<button class="flower-card pass-card ${hintId === 'pass' ? 'hinted' : ''}" data-action="play" data-id="pass" ${available ? '' : 'disabled'} aria-label="폭탄 패로 뒤집기만 하기"><svg viewBox="0 0 32 32" fill="none" stroke-width="1.5"><path d="M25 12A10 10 0 1 0 1 16M25 5V12H18"/></svg><small>뒤집기 ${s.passes[0]}</small></button>` : '') + (!s.hands[0].length && !s.passes[0] ? '<span class="empty-hand">손패를 모두 냈어요.</span>' : '');
   $('#special-actions').innerHTML = available ? [
-    ...game.bombOptions(0).map(m => `<button data-action="bomb" data-month="${m}">${m}월 폭탄 <span>×2</span></button>`),
+    ...bombs.map(m => `<button data-action="bomb" data-month="${m}">${m}월 폭탄 · 세 장 내기 <span>×2</span></button>`),
   ].join('') : '';
   const slots = game.slots(1);
   $('#opponent-hand').innerHTML = Array.from({ length: Math.min(s.hands[1].length, 10) }, () => `<span class="card-back">${cardBackSVG}</span>`).join('') + (slots ? `<span class="hidden-count">${slots}</span>` : '');
@@ -210,7 +212,7 @@ function render() {
   $('#game-log').innerHTML = (started ? s.events.slice(-3) : [{ text: '다람이가 당신을 기다리고 있어요.' }, { text: '첫 판을 시작하고 오늘의 운을 확인해 보세요.' }]).map(e => `<li>${escape(e.text)}</li>`).join('');
   if (started && s.lastTurn && previousTurn !== s.lastTurn) {
     previousTurn = s.lastTurn;
-    const specials = s.lastTurn.labels.filter(t => t !== '폭탄 뒤집기');
+    const specials = s.lastTurn.labels.filter(t => !['폭탄 뒤집기', '폭탄', '뻑', '따닥'].includes(t));
     if (specials.length) toast(specials.join(' · '));
     if (specials.length) sound('special');
   }
@@ -328,7 +330,7 @@ function hint() {
 
 function targetOptions(cards, action) {
   const recommended = settings.hints ? [...cards].sort((a, b) => game.cardValue(b, 0) - game.cardValue(a, 0))[0]?.id : null;
-  return `<div class="target-options">${cards.map(card => `<div class="target-option">${cardHTML(card, { disabled: false, action, className: `target-card ${card.id === recommended ? 'hint-target' : ''}`, label: ' · 이 바닥 패 선택' })}<strong>${escape(card.name)}</strong><span>${card.id === recommended ? '추천 패' : '이 패 위에 치기'}</span></div>`).join('')}</div>`;
+  return `<div class="target-options">${cards.map(card => `<button type="button" class="target-option" data-action="${action}" data-id="${card.id}" aria-label="${escape(card.name)} · 이 바닥 패 선택"><span class="flower-card target-card ${card.id === recommended ? 'hint-target' : ''}" aria-hidden="true">${cardSVG(card)}</span><strong>${escape(card.name)}</strong><span class="target-select">${card.id === recommended ? '추천 · ' : ''}선택하기</span></button>`).join('')}</div>`;
 }
 
 function choicePreview(card, title, description = '선택한 이 패로 칩니다.') {
@@ -341,6 +343,12 @@ function requestPlay(cardId, { bomb = false, targetId = null, origin = null } = 
   const card = s.hands[0].find(c => c.id === cardId);
   if (!card && cardId !== 'pass') return;
   const targets = card ? game.matches(card.month) : [];
+  if (!bomb && card && game.bombOptions(0).includes(card.month)) {
+    queuedPlay = { game, cardId, origin, targetId };
+    const trio = s.hands[0].filter(c => c.month === card.month);
+    showModal(`<p class="modal-kicker">${card.month}월 세 장 + 바닥 한 장</p><h2 id="modal-title">폭탄으로 한꺼번에 칠까요?</h2><p class="modal-description">손패 세 장으로 바닥 한 장까지 모두 먹습니다.<br>폭탄 뒤집기 두 번이 생깁니다. 상대 피가 있으면 한 장을 가져옵니다.</p><div class="bomb-preview"><div><small>함께 낼 손패</small><div class="bomb-trio">${trio.map(c => cardHTML(c)).join('')}</div></div><span aria-hidden="true">＋</span><div><small>먹을 바닥 패</small>${cardHTML(targets[0])}</div></div>${choicePreview(card, '내가 선택한 손패', '한 장만 내기를 고르면 이 패만 냅니다.')}<div class="bomb-actions"><button type="button" class="primary-button" data-action="play-bomb">폭탄 · 세 장 내기</button><button type="button" class="secondary-button" data-action="play-single">선택한 한 장만 내기</button><button type="button" class="secondary-button" data-action="close">취소</button></div>`, 'bomb-select');
+    return;
+  }
   if (!bomb && targets.length >= 2) {
     queuedPlay = { game, cardId, bomb, origin };
     showModal(`<p class="modal-kicker">내가 칠 바닥 패</p><h2 id="modal-title">어느 패 위에 칠까요?</h2>${choicePreview(card, '내가 선택한 손패')}${targetOptions(targets, 'play-target')}<p class="choice-note">${targets.length === 3 ? '같은 무늬 세 장은 모두 가져옵니다. 내려칠 위치를 골라 주세요.' : '바닥 패를 누르면 그 패 위에 내려칩니다.'}</p><div class="modal-footer"><button class="secondary-button" data-action="close">취소 · 손패 다시 고르기</button></div>`, 'play-select');
@@ -357,6 +365,19 @@ function showCaptureChoice() {
 }
 
 function boardCard(id) { return $(`#floor .flower-card[data-id="${id}"]`); }
+
+const turnEffects = new WeakMap();
+async function showTurnEffect(tx, kind) {
+  if (!tx.labels.includes(kind)) return;
+  const shown = turnEffects.get(tx) || new Set();
+  if (shown.has(kind)) return;
+  shown.add(kind); turnEffects.set(tx, shown);
+  const card = kind === '폭탄' ? tx.played[0] : tx.drawn;
+  const cards = [...$('#floor').querySelectorAll('.flower-card')].filter(el => Number(el.dataset.month) === card.month);
+  const anchor = boardCard(card.id)?.getBoundingClientRect() || $('#floor').getBoundingClientRect();
+  busy(`${tx.player ? '다람이' : '나'} · ${kind}!`);
+  await motion.special(kind, anchor, cards);
+}
 
 function busy(message) {
   $('#table-message').textContent = message;
@@ -392,6 +413,8 @@ async function flipDraw(tx) {
 
 async function finishMotion(tx) {
   if (game.state.phase !== 'choice') {
+    await showTurnEffect(tx, '뻑');
+    await showTurnEffect(tx, '따닥');
     if (tx.taken.length) {
       busy(`${tx.player ? '다람이가' : '내가'} ${tx.taken.length}장을 가져와요`);
       const positions = new Map();
@@ -418,6 +441,7 @@ async function finishMotion(tx) {
 async function runPlay(action, { targetId = null, origin = null } = {}) {
   if (animating || modal.open || game.state.phase !== 'playing') return;
   clearTimeout(aiTimer); clearHint();
+  clearTimeout(toastTimer); $('#event-toast').classList.remove('show');
   const player = game.state.turn;
   const previousTable = [...game.state.table];
   const deckCount = game.state.deck.length;
@@ -439,6 +463,7 @@ async function runPlay(action, { targetId = null, origin = null } = {}) {
       await motion.fly(card, origin || origins.get(card.id), to);
       element.classList.remove('landing-card');
     }
+    await showTurnEffect(tx, '폭탄');
     if (!(game.state.phase === 'choice' && tx.stage === 'hand')) {
       await motion.wait();
       await flipDraw(tx);
@@ -495,6 +520,16 @@ function handleAction(action, element) {
       runPlay(() => game.play(move.cardId, { bomb: move.bomb }), { targetId: element.dataset.id, origin: move.origin });
       break;
     }
+    case 'play-bomb': case 'play-single': {
+      const move = queuedPlay;
+      if (!move || move.game !== game || !modal.open || modal.dataset.kind !== 'bomb-select' || s.turn !== 0 || s.phase !== 'playing') break;
+      const card = s.hands[0].find(c => c.id === move.cardId);
+      const bomb = action === 'play-bomb';
+      if (!card || (bomb && !game.bombOptions(0).includes(card.month))) break;
+      queuedPlay = null; modal.close();
+      runPlay(() => game.play(move.cardId, { bomb }), { targetId: move.targetId, origin: move.origin });
+      break;
+    }
     case 'choose':
       if (s.turn === 0 && s.phase === 'choice' && (!modal.open || modal.dataset.kind === 'choice')) {
         if (!s.pending.choices.includes(element.dataset.id)) break;
@@ -519,11 +554,16 @@ function handleAction(action, element) {
   }
 }
 
+// 손패 터치/끌기 후 발생하는 호환 클릭이 새 팝업의 바깥 클릭으로 전달되지 않게 합니다.
+// 다음 실제 누르기는 대기 시간 없이 받습니다.
+document.addEventListener('pointerdown', () => { suppressClickUntil = 0; }, true);
 document.addEventListener('click', event => {
-  if (performance.now() < suppressClickUntil && !event.target.closest('#modal')) { event.preventDefault(); return; }
+  if (event.detail && performance.now() < suppressClickUntil) {
+    event.preventDefault(); event.stopImmediatePropagation(); return;
+  }
   const button = event.target.closest('[data-action]');
   if (button && !button.disabled) handleAction(button.dataset.action, button);
-});
+}, true);
 
 $('#hand').addEventListener('pointerdown', event => {
   const button = event.target.closest('.flower-card[data-action="play"]');

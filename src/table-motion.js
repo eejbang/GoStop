@@ -60,6 +60,82 @@ export class TableMotion {
     animation.finished.finally(() => ring.remove());
   }
 
+  /** 패가 모인 자리에서 특수 상황을 보여 준 뒤 먹는 동작으로 이어집니다. */
+  async special(kind, rect, cards = []) {
+    const effects = {
+      '폭탄': { key: 'bomb', caption: '세 장 폭탄!', detail: '같은 월 네 장 획득', color: '#ffcc57' },
+      '뻑': { key: 'ppeok', caption: '뻑!', detail: '세 장이 바닥에 남아요', color: '#ff735f' },
+      '따닥': { key: 'ttadak', caption: '따닥!', detail: '같은 월 네 장 획득', color: '#a4f4df' },
+    };
+    const effect = effects[kind];
+    if (!effect || !rect) return;
+    const center = point(rect), size = Math.min(280, innerWidth - 24);
+    const x = Math.max(size / 2 + 12, Math.min(innerWidth - size / 2 - 12, center.x));
+    const y = Math.max(100, Math.min(innerHeight - 100, center.y));
+    const layer = document.createElement('div');
+    layer.className = `turn-effect effect-${effect.key}${this.reduced ? ' effect-static' : ''}`;
+    layer.dataset.effect = kind;
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.left = `${x}px`; layer.style.top = `${y}px`;
+    layer.style.setProperty('--effect-color', effect.color);
+    const burst = '<svg class="effect-burst" viewBox="0 0 240 240"><path d="M120 4 139 64 184 21 174 83 236 75 191 119 236 163 174 155 184 217 139 174 120 236 101 174 56 217 66 155 4 163 49 119 4 75 66 83 56 21 101 64Z"/></svg>';
+    layer.innerHTML = `${burst}<i class="effect-ring"></i><i class="effect-ring effect-ring-second"></i><div class="effect-stamp"><small>${effect.caption}</small><strong>${kind}${kind === '폭탄' ? '!' : ''}</strong><span>${effect.detail}</span></div>${Array.from({ length: 12 }, (_, i) => `<i class="effect-spark" style="--spark-angle:${i * 30}deg"></i>`).join('')}`;
+    document.body.append(layer);
+    this.sound('special');
+    try {
+      if (this.reduced) { await pause(450); return; }
+      const duration = this.speed() === 'fast' ? 700 : 950;
+      const stamp = layer.querySelector('.effect-stamp');
+      const frames = kind === '뻑' ? [
+        { transform: 'scale(2) rotate(-20deg)', opacity: 0 },
+        { transform: 'scale(.92) rotate(-10deg)', opacity: 1, offset: .2 },
+        { transform: 'scale(1) rotate(-10deg)', opacity: 1, offset: .75 },
+        { transform: 'scale(1.05) rotate(-10deg)', opacity: 0 },
+      ] : kind === '따닥' ? [
+        { transform: 'scale(.5) rotate(4deg)', opacity: 0 },
+        { transform: 'scale(1.12) rotate(-4deg)', opacity: 1, offset: .18 },
+        { transform: 'scale(.94) rotate(3deg)', opacity: 1, offset: .28 },
+        { transform: 'scale(1.12) rotate(-3deg)', opacity: 1, offset: .4 },
+        { transform: 'scale(1)', opacity: 1, offset: .78 },
+        { transform: 'scale(1.1)', opacity: 0 },
+      ] : [
+        { transform: 'scale(.3)', opacity: 0 },
+        { transform: 'scale(1.2) rotate(-4deg)', opacity: 1, offset: .22 },
+        { transform: 'scale(1)', opacity: 1, offset: .78 },
+        { transform: 'scale(1.15)', opacity: 0 },
+      ];
+      const animations = [stamp.animate(frames, { duration, fill: 'forwards' })];
+      layer.querySelectorAll('.effect-ring').forEach((ring, i) => animations.push(ring.animate([
+        { transform: 'scale(.25)', opacity: .9 }, { transform: 'scale(1.3)', opacity: 0 },
+      ], { duration: duration * .7, delay: i * 130, fill: 'both', easing: 'ease-out' })));
+      animations.push(layer.querySelector('.effect-burst').animate([
+        { transform: 'scale(.2) rotate(-12deg)', opacity: 0 },
+        { transform: 'scale(1) rotate(6deg)', opacity: .9, offset: .25 },
+        { transform: 'scale(1.2) rotate(12deg)', opacity: 0 },
+      ], { duration, fill: 'forwards' }));
+      layer.querySelectorAll('.effect-spark').forEach((spark, i) => {
+        const angle = i * Math.PI / 6;
+        animations.push(spark.animate([
+          { transform: `translate(-50%,-50%) rotate(${i * 30}deg) scale(.3)`, opacity: 1 },
+          { transform: `translate(calc(-50% + ${Math.cos(angle) * size * .48}px),calc(-50% + ${Math.sin(angle) * size * .48}px)) rotate(${i * 30}deg) scale(1)`, opacity: 0 },
+        ], { duration: duration * .8, fill: 'forwards', easing: 'ease-out' }));
+      });
+      for (const card of cards) animations.push(card.animate([
+        { filter: `drop-shadow(0 0 2px ${effect.color})` },
+        { filter: `drop-shadow(0 0 18px ${effect.color})`, offset: .35 },
+        { filter: 'drop-shadow(1px 3px 3px #0005)' },
+      ], { duration: duration * .8 }));
+      if (kind === '폭탄') {
+        const field = document.querySelector('.table-field');
+        if (field) animations.push(field.animate([
+          { transform: 'translateX(0)' }, { transform: 'translateX(-5px)' },
+          { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' },
+        ], { duration: 250, delay: 80 }));
+      }
+      await Promise.allSettled(animations.map(animation => animation.finished));
+    } finally { layer.remove(); }
+  }
+
   async collect(cards, positions, player) {
     if (!cards.length) return;
     this.sound('collect');
