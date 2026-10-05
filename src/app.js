@@ -168,7 +168,6 @@ function render() {
   $('#my-captured-count').textContent = s.captured[0].length;
   $('#ai-captured-count').textContent = s.captured[1].length;
   $('#round-label').textContent = `${round}번째 판${s.carry > 1 ? ` · 나가리 ${s.carry}배` : ''}`;
-  $('#session-record').textContent = `${records.wins}승 ${records.losses}패${records.draws ? ` ${records.draws}무` : ''} · ${records.wins + records.losses ? '나만의 한 판을 쌓는 중' : '첫 승을 기다리는 중'}`;
   $('#opponent-description').textContent = { easy: '오늘은 가볍게 즐겨 볼까요?', normal: '느긋하지만, 패는 야무지게', hard: '한 수 앞을 보는 승부사' }[game.difficulty];
   $('#my-description').textContent = !started ? '좋은 패가 들어올 것 같은 예감' : s.go[0] ? `${s.go[0]}고! 조금 더 크게 가 볼까요?` : game.score(0).total >= 7 ? '이제 결정할 시간이에요' : '한 장씩, 차근차근 모아 봐요';
   const yourTurn = started && s.turn === 0 && s.phase === 'playing';
@@ -266,7 +265,6 @@ function recordResult() {
   records.history.unshift({ winner: r.winner, total: r.total, reason: r.reason, date: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }) });
   records.history = records.history.slice(0, 10);
   saveStored('ohu-records-v1', records);
-  $('#session-record').textContent = `${records.wins}승 ${records.losses}패${records.draws ? ` ${records.draws}무` : ''} · 나만의 한 판을 쌓는 중`;
 }
 
 function showResult() {
