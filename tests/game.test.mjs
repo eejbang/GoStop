@@ -156,6 +156,51 @@ test('흔들기는 동일 월 세 장에만 허용하고 중복 선언을 막는
   assert.equal(game.state.shakes[0], 1);
 });
 
+test('같은 월 세 장을 가진 양쪽 플레이어에게 나눔 즉시 자동 흔들기를 적용한다', () => {
+  let shook = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const game = new MatgoGame({ rng: rng(seed) });
+    if (game.state.phase === 'finished') continue;
+    for (const player of [0, 1]) {
+      const months = [...new Set(game.state.hands[player].map(c => c.month))].filter(month => game.state.hands[player].filter(c => c.month === month).length === 3);
+      assert.deepEqual(game.state.shaken[player], months);
+      assert.equal(game.state.shakes[player], months.length);
+      assert.deepEqual(game.autoShake(player), []);
+      shook += months.length;
+      for (const month of months) assert.ok(game.state.events.some(e => e.kind === 'shake' && e.player === player && e.text.includes(`${month}월`)));
+    }
+  }
+  assert.ok(shook > 5);
+});
+
+test('자동 흔들기는 클릭한 패를 바꾸지 않고 정확히 한 장만 낸다', () => {
+  const game = fixture({ hand: ['1-0', '1-1', '1-2', '2-2'], table: ['4-1'], draw: '5-3' });
+  assert.equal(game.play('1-2'), true);
+  assert.deepEqual(game.state.lastTurn.played.map(c => c.id), ['1-2']);
+  assert.deepEqual(game.state.hands[0].map(c => c.id), ['1-0', '1-1', '2-2']);
+  assert.deepEqual(game.state.shaken[0], [1]);
+  assert.equal(game.state.shakes[0], 1);
+  assert.ok(game.settlement(0).factors.some(f => f.name === '흔들기·폭탄' && f.value === 2));
+});
+
+test('다른 월의 패를 선택해도 세 장은 자동 흔들기만 하고 선택한 패만 낸다', () => {
+  const game = fixture({ hand: ['1-0', '1-1', '1-2', '2-2'], table: ['4-1'], draw: '5-3' });
+  game.play('2-2');
+  assert.deepEqual(game.state.lastTurn.played.map(c => c.id), ['2-2']);
+  assert.deepEqual(game.state.hands[0].map(c => c.id), ['1-0', '1-1', '1-2']);
+  assert.equal(game.state.shakes[0], 1);
+});
+
+test('자동 흔들기 후 같은 세 장으로 폭탄을 쳐도 배율을 중복 적용하지 않는다', () => {
+  const game = fixture({ hand: ['1-0', '1-1', '1-2', '2-2'], table: ['1-3', '4-1'], draw: '5-3' });
+  assert.deepEqual(game.autoShake(0), [1]);
+  assert.equal(game.state.shakes[0], 1);
+  game.play('1-2', { bomb: true });
+  assert.equal(game.state.shakes[0], 1);
+  assert.deepEqual(game.state.lastTurn.played.map(c => c.id), ['1-0', '1-1', '1-2']);
+  assert.equal(game.state.passes[0], 2);
+});
+
 test('7점에서 선택하며 고 뒤에는 획득 점수가 올라야 다시 선택한다', () => {
   const captured = get('1-1', '2-1', '3-1', '6-1', '9-1', '10-1');
   const game = fixture({ hand: ['4-2', '5-2', '7-2'], table: ['4-3'], draw: '8-2' });

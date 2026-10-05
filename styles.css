@@ -94,3 +94,36 @@ main{padding:16px 0}
   .game-toolbar{padding:10px 24px}
 }
 @media(min-width:1280px) and (max-width:1535px){.floor{--floor-columns:7;gap:24px 16px}.table-field{gap:28px}.deck-area{flex-basis:76px}}
+
+/* 뻑은 패 세 장이 살짝 어긋난 하나의 더미입니다. */
+.floor-slot.ppeok-stack{--stack-step:7px}
+.stack-layer{position:absolute;inset:0;z-index:var(--stack-index);transform:translate(calc(var(--stack-index) * var(--stack-step)),calc(var(--stack-index) * var(--stack-step) * .7)) rotate(calc(var(--stack-index) * 3deg - 3deg))}
+.stack-layer .flower-card{--card-width:var(--floor-card-width)}
+.ppeok-stack .floor-month{bottom:-29px;color:#f0d58c}
+.shaken-card:before{content:"흔들기";position:absolute;top:4px;left:4px;z-index:1;background:#15372ee8;color:#ffe2a0;border:1px solid #d2b77c88;border-radius:3px;padding:1px 4px;font-size:9px;pointer-events:none}
+#modal[data-kind="play-select"],#modal[data-kind="choice"]{width:min(680px,calc(100vw - 32px))}
+.choice-preview{display:flex;align-items:center;gap:18px;border:1px solid #b59d5d55;background:#c3a4620a;border-radius:10px;padding:16px;margin-top:20px}
+.choice-preview .flower-card{--card-width:70px;flex-shrink:0}
+.choice-preview small{display:block;color:#a6bda2;font-size:11px;margin-bottom:7px}
+.choice-preview strong{display:block;font-size:17px;color:#f1db9c}
+.choice-preview p{font-size:11px;color:#a6bda2;margin:9px 0 0}
+.target-options{display:flex;justify-content:center;gap:38px;margin:28px 0 22px}
+.target-option{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;flex:1}
+.target-card{--card-width:104px}
+.target-card:hover{transform:translateY(-5px)}
+.target-option strong{font-size:12px;font-weight:500;text-align:center}
+.target-option>span{font-size:10px;color:#dcc28b}
+.choice-note{text-align:center;font-size:11px;color:#acbea3;margin:12px 0 0}
+@media(max-width:600px){
+  .floor-slot.ppeok-stack{--stack-step:4px}
+  .ppeok-stack .floor-month{bottom:-24px;font-size:7px}
+  .shaken-card:before{font-size:6px;padding:0 2px;top:2px;left:2px}
+  .choice-preview{padding:12px;gap:13px}
+  .choice-preview .flower-card{--card-width:51px}
+  .choice-preview strong{font-size:13px}
+  .choice-preview small,.choice-preview p{font-size:9px}
+  .target-options{gap:16px;margin:25px 0 20px}
+  .target-card{--card-width:clamp(52px,18vw,80px)}
+  .target-option strong{font-size:9px}
+  .target-option>span,.choice-note{font-size:9px}
+}

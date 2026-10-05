@@ -51,10 +51,14 @@ export class MatgoGame {
         break;
       }
     }
+    if (this.state.phase === 'playing') {
+      this.autoShake(0);
+      this.autoShake(1);
+    }
   }
 
-  log(text, kind = 'normal') {
-    this.state.events.push({ text, kind, player: this.state.turn });
+  log(text, kind = 'normal', player = this.state.turn) {
+    this.state.events.push({ text, kind, player });
     if (this.state.events.length > 40) this.state.events.shift();
   }
 
@@ -64,7 +68,7 @@ export class MatgoGame {
 
   shakeOptions(player = this.state.turn) {
     return [...new Set(this.state.hands[player].map(c => c.month))].filter(month =>
-      this.state.hands[player].filter(c => c.month === month).length === 3 && this.matches(month).length === 0 && !this.state.shaken[player].includes(month));
+      this.state.hands[player].filter(c => c.month === month).length === 3 && !this.state.shaken[player].includes(month));
   }
 
   bombOptions(player = this.state.turn) {
@@ -72,13 +76,18 @@ export class MatgoGame {
       this.state.hands[player].filter(c => c.month === month).length === 3 && this.matches(month).length === 1);
   }
 
-  shake(month) {
-    const s = this.state, player = s.turn;
+  shake(month, player = this.state.turn) {
+    const s = this.state;
     if (s.phase !== 'playing' || !this.shakeOptions(player).includes(month)) return false;
     s.shaken[player].push(month);
     s.shakes[player]++;
-    this.log(`${player === 0 ? '나' : '다람'}: ${month}월 흔들기! 승리 점수 ×2`, 'shake');
+    this.log(`${player === 0 ? '나' : '다람'}: ${month}월 자동 흔들기! 승리 점수 ×2`, 'shake', player);
     return true;
+  }
+
+  autoShake(player = this.state.turn) {
+    const months = this.shakeOptions(player);
+    return months.filter(month => this.shake(month, player));
   }
 
   removeTable(cards) {
@@ -94,6 +103,7 @@ export class MatgoGame {
     const card = s.hands[player].find(c => c.id === cardId);
     if (pass ? s.passes[player] < 1 : !card) return false;
     if (bomb && (!card || !this.bombOptions(player).includes(card.month))) return false;
+    this.autoShake(player);
 
     const tx = {
       player, played: [], drawn: null, taken: [], labels: [], steals: 0,
@@ -112,7 +122,6 @@ export class MatgoGame {
       this.removeTable(floor);
       tx.taken.push(...tx.played, ...floor);
       s.passes[player] += 2;
-      s.shakes[player]++;
       tx.labels.push('폭탄');
       tx.steals++;
     } else {
@@ -230,7 +239,8 @@ export class MatgoGame {
     s.lastTurn = tx;
     s.pending = null;
     const who = tx.player === 0 ? '나' : '다람';
-    this.log(`${who}: ${tx.played.length ? `${tx.played[0].month}월 패` : '폭탄 패'} · ${tx.taken.length}장 획득${tx.labels.length ? ` · ${tx.labels.join(', ')}` : ''}${tx.stolen.length ? ` · 피 ${tx.stolen.reduce((n, c) => n + c.pi, 0)}장 가져오기` : ''}`, tx.labels[0] || 'play');
+    const playedName = tx.played.length === 3 ? `${tx.played[0].month}월 폭탄 (3장)` : tx.played[0]?.name || '폭탄 뒤집기';
+    this.log(`${who}: ${playedName} · ${tx.taken.length}장 획득${tx.labels.length ? ` · ${tx.labels.join(', ')}` : ''}${tx.stolen.length ? ` · 피 ${tx.stolen.reduce((n, c) => n + c.pi, 0)}장 가져오기` : ''}`, tx.labels[0] || 'play');
     if (s.ppeoks[tx.player] >= 3) { this.finish(tx.player, '3뻑', 7); return true; }
     const score = this.score(tx.player).total;
     if (score >= 7 && score > s.thresholds[tx.player]) {
@@ -330,7 +340,6 @@ export class MatgoGame {
       const ids = [...s.hands[1].map(c => c.id), ...(s.passes[1] ? ['pass'] : [])];
       return this.play(ids[Math.floor(this.rng() * ids.length)]);
     }
-    for (const month of this.shakeOptions()) this.shake(month);
     const move = this.recommend();
     return this.play(move.id, { bomb: !!move.bomb });
   }

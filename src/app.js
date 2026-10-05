@@ -27,6 +27,8 @@ let game = new MatgoGame({ difficulty: settings.difficulty });
 let started = false, round = 1, aiTimer = null, toastTimer = null, hintId = null, hintText = '', shownResult = false, savedResult = false, previousTurn = null, audioContext = null;
 let animating = false, visualTable = null, visualDeckCount = null, visualDrawn = null, drag = null, suppressClickUntil = 0;
 const floorSlots = new Map();
+const ppeokStacks = new Map();
+let queuedPlay = null;
 const modal = $('#modal');
 const motion = new TableMotion({ speed: () => settings.speed, sound });
 
@@ -74,6 +76,16 @@ function renderFloor() {
   const table = visualTable ?? s.table;
   const ids = new Set(table.map(c => c.id));
   for (const id of floorSlots.keys()) if (!ids.has(id)) floorSlots.delete(id);
+  const stackedMonths = [...new Set(table.map(c => c.month))].filter(month => s.ppeokOwners[month] !== undefined && table.filter(c => c.month === month).length === 3);
+  for (const month of ppeokStacks.keys()) if (!stackedMonths.includes(month)) ppeokStacks.delete(month);
+  for (const month of stackedMonths) {
+    const cards = table.filter(c => c.month === month);
+    if (!ppeokStacks.has(month)) ppeokStacks.set(month, cards.map(c => c.id));
+    const existing = cards.map(c => floorSlots.get(c.id)).filter(slot => slot !== undefined);
+    let slot = existing.length ? Math.min(...existing) : 0;
+    if (!existing.length) while ([...floorSlots.values()].includes(slot)) slot++;
+    for (const card of cards) floorSlots.set(card.id, slot);
+  }
   const columns = Number(getComputedStyle($('#floor')).getPropertyValue('--floor-columns')) || 6;
   for (const card of table) {
     if (floorSlots.has(card.id)) continue;
@@ -82,9 +94,17 @@ function renderFloor() {
     floorSlots.set(card.id, slot);
   }
   const recommended = choice && settings.hints ? game.bestChoice() : null;
+  const renderedStacks = new Set();
   $('#floor').innerHTML = table.map(card => {
     const slot = floorSlots.get(card.id), choosing = choice && tx.choices.includes(card.id);
-    return `<div class="floor-slot" data-card-id="${card.id}" style="grid-column:${slot % columns + 1};grid-row:${Math.floor(slot / columns) + 1};--slant:${(card.month * 7 + card.index * 3) % 7 - 3}deg">${cardHTML(card, { disabled: !choosing, action: 'choose', className: `${choosing ? 'choice-card' : ''} ${recommended === card.id ? 'hint-target' : ''}` })}<span class="floor-month">${card.month}월${s.ppeokOwners[card.month] !== undefined ? ' · 뻑' : ''}</span></div>`;
+    const position = `grid-column:${slot % columns + 1};grid-row:${Math.floor(slot / columns) + 1}`;
+    if (stackedMonths.includes(card.month)) {
+      if (renderedStacks.has(card.month)) return '';
+      renderedStacks.add(card.month);
+      const cards = ppeokStacks.get(card.month).map(id => table.find(c => c.id === id));
+      return `<div class="floor-slot ppeok-stack" data-month="${card.month}" style="${position}" aria-label="${card.month}월 뻑, 세 장 겹침">${cards.map((c, index) => `<div class="stack-layer" style="--stack-index:${index}">${cardHTML(c)}</div>`).join('')}<span class="floor-month">${card.month}월 · 뻑 · 3장</span></div>`;
+    }
+    return `<div class="floor-slot" data-card-id="${card.id}" style="${position};--slant:${(card.month * 7 + card.index * 3) % 7 - 3}deg">${cardHTML(card, { disabled: !choosing, action: 'choose', className: `${choosing ? 'choice-card' : ''} ${recommended === card.id ? 'hint-target' : ''}` })}<span class="floor-month">${card.month}월</span></div>`;
   }).join('');
   if (!choice && hintId && settings.hints && !animating) {
     const card = s.hands[0].find(c => c.id === hintId);
@@ -104,10 +124,10 @@ function renderHand() {
   $('#hand').classList.toggle('muted', !available);
   $('#hand').innerHTML = s.hands[0].map((c, i) => {
     const matches = s.table.some(t => t.month === c.month);
-    return cardHTML(c, { disabled: !available, action: 'play', key: i === 9 ? '0' : String(i + 1), className: `${matches && available ? 'match-card' : ''} ${hintId === c.id ? 'hinted' : ''}`, label: matches ? ' · 바닥에 같은 무늬 있음' : '' });
+    const shaken = started && s.shaken[0].includes(c.month);
+    return cardHTML(c, { disabled: !available, action: 'play', key: i === 9 ? '0' : String(i + 1), className: `${matches && available ? 'match-card' : ''} ${hintId === c.id ? 'hinted' : ''} ${shaken ? 'shaken-card' : ''}`, label: `${matches ? ' · 바닥에 같은 무늬 있음' : ''}${shaken ? ' · 자동 흔들기 적용' : ''}` });
   }).join('') + (s.passes[0] ? `<button class="flower-card pass-card ${hintId === 'pass' ? 'hinted' : ''}" data-action="play" data-id="pass" ${available ? '' : 'disabled'} aria-label="폭탄 패로 뒤집기만 하기"><svg viewBox="0 0 32 32" fill="none" stroke-width="1.5"><path d="M25 12A10 10 0 1 0 1 16M25 5V12H18"/></svg><small>뒤집기 ${s.passes[0]}</small></button>` : '') + (!s.hands[0].length && !s.passes[0] ? '<span class="empty-hand">손패를 모두 냈어요.</span>' : '');
   $('#special-actions').innerHTML = available ? [
-    ...game.shakeOptions(0).map(m => `<button data-action="shake" data-month="${m}">${m}월 흔들기 <span>×2</span></button>`),
     ...game.bombOptions(0).map(m => `<button data-action="bomb" data-month="${m}">${m}월 폭탄 <span>×2</span></button>`),
   ].join('') : '';
   const slots = game.slots(1);
@@ -170,6 +190,9 @@ function render() {
   $('#round-label').textContent = `${round}번째 판${s.carry > 1 ? ` · 나가리 ${s.carry}배` : ''}`;
   $('#opponent-description').textContent = { easy: '오늘은 가볍게 즐겨 볼까요?', normal: '느긋하지만, 패는 야무지게', hard: '한 수 앞을 보는 승부사' }[game.difficulty];
   $('#my-description').textContent = !started ? '좋은 패가 들어올 것 같은 예감' : s.go[0] ? `${s.go[0]}고! 조금 더 크게 가 볼까요?` : game.score(0).total >= 7 ? '이제 결정할 시간이에요' : '한 장씩, 차근차근 모아 봐요';
+  for (const player of [0, 1]) if (started && s.shakes[player]) {
+    $(player ? '#opponent-description' : '#my-description').textContent += ` · 흔들기 ×${2 ** s.shakes[player]}`;
+  }
   const yourTurn = started && s.turn === 0 && s.phase === 'playing';
   const choosing = started && s.turn === 0 && s.phase === 'choice';
   const thinking = started && s.turn === 1 && s.phase !== 'finished';
@@ -194,7 +217,8 @@ function render() {
   if (started && s.phase === 'finished') {
     recordResult();
     if (!shownResult) { shownResult = true; showResult(); }
-  } else if (started && s.turn === 0 && s.phase === 'decision' && !modal.open) showDecision();
+  } else if (started && s.turn === 0 && s.phase === 'choice' && !modal.open) showCaptureChoice();
+  else if (started && s.turn === 0 && s.phase === 'decision' && !modal.open) showDecision();
   scheduleAI();
 }
 
@@ -228,27 +252,29 @@ function startGame({ next = false } = {}) {
   if (started) round++;
   clearTimeout(aiTimer); clearTimeout(toastTimer); $('#event-toast').classList.remove('show'); clearHint();
   game = new MatgoGame({ difficulty: settings.difficulty, dealer, carry });
-  visualTable = null; visualDeckCount = null; visualDrawn = null; animating = false; floorSlots.clear();
+  visualTable = null; visualDeckCount = null; visualDrawn = null; animating = false; queuedPlay = null; floorSlots.clear(); ppeokStacks.clear();
   started = true; shownResult = false; savedResult = false; previousTurn = null;
   modal.close(); render(); sound('go');
+  if (game.state.shaken[0].length && game.state.phase !== 'finished') toast('자동 흔들기 · ×' + 2 ** game.state.shakes[0]);
 }
 
 function showModal(html, name) {
   clearTimeout(aiTimer); aiTimer = null;
   $('#modal-content').innerHTML = html;
-  $('.modal-close').hidden = name === 'decision';
+  $('.modal-close').hidden = ['decision', 'choice'].includes(name);
   modal.dataset.kind = name;
   if (!modal.open) modal.showModal();
   $('#turn-label').textContent = started && game.state.phase !== 'finished' ? '잠깐 쉬어 가는 중' : $('#turn-label').textContent;
 }
 
 function closeModal() {
-  if (modal.dataset.kind === 'decision') return;
+  if (['decision', 'choice'].includes(modal.dataset.kind)) return;
+  queuedPlay = null;
   modal.close(); render();
 }
 
 function showRules() {
-  showModal(`<p class="modal-kicker">알고 나면 더 재미있는</p><h2 id="modal-title">맞고, 이렇게 즐겨요</h2><p class="modal-description">같은 월의 무늬를 모으는 2인 화투 게임이에요.<br>컴퓨터 다람이와 번갈아 패를 내고, 먼저 7점을 만들어 보세요.</p><div class="rule-steps"><div class="rule-step"><b>01</b><strong>같은 무늬 내기</strong><p>손패 10장, 바닥 8장으로 시작. 같은 월의 패를 내면 가져와요.</p></div><div class="rule-step"><b>02</b><strong>한 장 뒤집기</strong><p>더미에서 한 장을 뒤집어요. 같은 무늬가 있으면 또 가져와요.</p></div><div class="rule-step"><b>03</b><strong>7점, 고 또는 스톱</strong><p>스톱하면 승리! 고하면 계속. 점수가 늘면 다시 선택해요.</p></div></div><h3>모을수록 올라가는 점수</h3><table class="rule-table"><tbody><tr><th>광</th><td>3광 3점 · 비광 포함 3광 2점 · 4광 4점 · 5광 15점</td></tr><tr><th>열끗</th><td>5장부터 1점, 이후 장당 +1점 · 고도리(2·4·8월 새) +5점</td></tr><tr><th>띠</th><td>5장부터 1점, 이후 장당 +1점 · 홍단·청단·초단 각 +3점</td></tr><tr><th>피</th><td>10장부터 1점, 이후 장당 +1점 · 쌍피는 2장으로 계산</td></tr><tr><th>고</th><td>고마다 +1점 · 3고부터 ×2, 4고 ×4, 5고 ×8…</td></tr></tbody></table><h3>패를 모으는 재미</h3><p class="rule-copy"><strong>뻑</strong> 먹으려 낸 패와 뒤집은 패까지 같은 월이면 세 장을 바닥에 남겨요. 이후 먹으면 상대 피 1장, 자기가 만든 뻑을 먹으면 피 2장을 가져와요. 한 판에 3뻑이면 7점으로 승리해요.<br><strong>쪽·따닥·판쓸이</strong> 낸 패를 바로 뒤집어 먹거나, 바닥 두 장을 나머지 두 장으로 먹거나, 바닥을 모두 먹으면 상대 피 1장씩 가져와요.<br><strong>흔들기·폭탄</strong> 같은 월 세 장이 손에 있을 때 흔들거나, 바닥 한 장을 세 장으로 한 번에 먹을 수 있어요. 각각 승리 배율 ×2. 폭탄 뒤에는 두 번 뒤집기만 할 수 있어요.</p><h3>이 게임에서 쓰는 규칙</h3><p class="rule-copy">기본 화투 48장으로 플레이하며 9월 국진은 쌍피로 계산해요. 피로 점수가 났을 때 상대 피가 7장 이하면 <strong>피박 ×2</strong>, 광으로 점수가 났을 때 상대 광이 없으면 <strong>광박 ×2</strong>. 열끗 7장은 <strong>멍따 ×2</strong>, 고를 한 상대를 이기면 <strong>고박 ×2</strong>예요. 나가리 다음 판은 2배, 연속 나가리는 최대 8배예요. 손패 총통은 10점 즉시 승리, 바닥 총통은 다시 나눠요. 마지막 손패에는 뻑·쪽·판쓸이의 특수 보상을 적용하지 않아요. 첫뻑·첫따닥의 별도 정산은 생략해요.</p><p class="rule-copy">게임 점수로만 승부를 기록해요. 전적은 이 브라우저에 저장돼요.<br>기본 규칙 참고: <a href="https://mgostop.hangame.com/guide/combine/02_01_rule.html" target="_blank" rel="noopener noreferrer">한게임 공식 맞고 가이드 ↗</a></p><div class="modal-footer"><button class="primary-button" data-action="close">알겠어요</button></div>`, 'rules');
+  showModal(`<p class="modal-kicker">알고 나면 더 재미있는</p><h2 id="modal-title">맞고, 이렇게 즐겨요</h2><p class="modal-description">같은 월의 무늬를 모으는 2인 화투 게임이에요.<br>컴퓨터 다람이와 번갈아 패를 내고, 먼저 7점을 만들어 보세요.</p><div class="rule-steps"><div class="rule-step"><b>01</b><strong>같은 무늬 내기</strong><p>손패 10장, 바닥 8장으로 시작. 같은 월의 패를 내면 가져와요.</p></div><div class="rule-step"><b>02</b><strong>한 장 뒤집기</strong><p>더미에서 한 장을 뒤집어요. 같은 무늬가 있으면 또 가져와요.</p></div><div class="rule-step"><b>03</b><strong>7점, 고 또는 스톱</strong><p>스톱하면 승리! 고하면 계속. 점수가 늘면 다시 선택해요.</p></div></div><h3>모을수록 올라가는 점수</h3><table class="rule-table"><tbody><tr><th>광</th><td>3광 3점 · 비광 포함 3광 2점 · 4광 4점 · 5광 15점</td></tr><tr><th>열끗</th><td>5장부터 1점, 이후 장당 +1점 · 고도리(2·4·8월 새) +5점</td></tr><tr><th>띠</th><td>5장부터 1점, 이후 장당 +1점 · 홍단·청단·초단 각 +3점</td></tr><tr><th>피</th><td>10장부터 1점, 이후 장당 +1점 · 쌍피는 2장으로 계산</td></tr><tr><th>고</th><td>고마다 +1점 · 3고부터 ×2, 4고 ×4, 5고 ×8…</td></tr></tbody></table><h3>패를 모으는 재미</h3><p class="rule-copy"><strong>뻑</strong> 먹으려 낸 패와 뒤집은 패까지 같은 월이면 세 장을 바닥에 남겨요. 이후 먹으면 상대 피 1장, 자기가 만든 뻑을 먹으면 피 2장을 가져와요. 한 판에 3뻑이면 7점으로 승리해요.<br><strong>쪽·따닥·판쓸이</strong> 낸 패를 바로 뒤집어 먹거나, 바닥 두 장을 나머지 두 장으로 먹거나, 바닥을 모두 먹으면 상대 피 1장씩 가져와요.<br><strong>흔들기·폭탄</strong> 손에 같은 월 세 장이 있으면 자동 흔들기가 적용돼요. 내가 선택한 한 장을 그대로 내고, 바닥 한 장을 세 장으로 한 번에 먹으려면 폭탄 버튼을 눌러요. 같은 세 장의 흔들기와 폭탄은 승리 배율 ×2를 한 번만 적용해요. 폭탄 뒤에는 두 번 뒤집기만 할 수 있어요.</p><h3>이 게임에서 쓰는 규칙</h3><p class="rule-copy">기본 화투 48장으로 플레이하며 9월 국진은 쌍피로 계산해요. 피로 점수가 났을 때 상대 피가 7장 이하면 <strong>피박 ×2</strong>, 광으로 점수가 났을 때 상대 광이 없으면 <strong>광박 ×2</strong>. 열끗 7장은 <strong>멍따 ×2</strong>, 고를 한 상대를 이기면 <strong>고박 ×2</strong>예요. 나가리 다음 판은 2배, 연속 나가리는 최대 8배예요. 손패 총통은 10점 즉시 승리, 바닥 총통은 다시 나눠요. 마지막 손패에는 뻑·쪽·판쓸이의 특수 보상을 적용하지 않아요. 첫뻑·첫따닥의 별도 정산은 생략해요.</p><p class="rule-copy">게임 점수로만 승부를 기록해요. 전적은 이 브라우저에 저장돼요.<br>기본 규칙 참고: <a href="https://mgostop.hangame.com/guide/combine/02_01_rule.html" target="_blank" rel="noopener noreferrer">한게임 공식 맞고 가이드 ↗</a></p><div class="modal-footer"><button class="primary-button" data-action="close">알겠어요</button></div>`, 'rules');
 }
 
 function showSettings() {
@@ -298,6 +324,36 @@ function hint() {
   settings.hints = !settings.hints;
   saveStored('ohu-settings-v1', settings);
   render();
+}
+
+function targetOptions(cards, action) {
+  const recommended = settings.hints ? [...cards].sort((a, b) => game.cardValue(b, 0) - game.cardValue(a, 0))[0]?.id : null;
+  return `<div class="target-options">${cards.map(card => `<div class="target-option">${cardHTML(card, { disabled: false, action, className: `target-card ${card.id === recommended ? 'hint-target' : ''}`, label: ' · 이 바닥 패 선택' })}<strong>${escape(card.name)}</strong><span>${card.id === recommended ? '추천 패' : '이 패 위에 치기'}</span></div>`).join('')}</div>`;
+}
+
+function choicePreview(card, title, description = '선택한 이 패로 칩니다.') {
+  return `<div class="choice-preview">${cardHTML(card)}<div><small>${title}</small><strong>${escape(card.name)}</strong><p>${description}</p></div></div>`;
+}
+
+function requestPlay(cardId, { bomb = false, targetId = null, origin = null } = {}) {
+  const s = game.state;
+  if (!started || animating || modal.open || s.turn !== 0 || s.phase !== 'playing') return;
+  const card = s.hands[0].find(c => c.id === cardId);
+  if (!card && cardId !== 'pass') return;
+  const targets = card ? game.matches(card.month) : [];
+  if (!bomb && targets.length >= 2) {
+    queuedPlay = { game, cardId, bomb, origin };
+    showModal(`<p class="modal-kicker">내가 칠 바닥 패</p><h2 id="modal-title">어느 패 위에 칠까요?</h2>${choicePreview(card, '내가 선택한 손패')}${targetOptions(targets, 'play-target')}<p class="choice-note">${targets.length === 3 ? '같은 무늬 세 장은 모두 가져옵니다. 내려칠 위치를 골라 주세요.' : '바닥 패를 누르면 그 패 위에 내려칩니다.'}</p><div class="modal-footer"><button class="secondary-button" data-action="close">취소 · 손패 다시 고르기</button></div>`, 'play-select');
+    return;
+  }
+  runPlay(() => game.play(cardId, { bomb }), { targetId, origin });
+}
+
+function showCaptureChoice() {
+  const tx = game.state.pending;
+  const card = tx.stage === 'draw' ? tx.drawn : tx.played[0];
+  const targets = game.state.table.filter(c => tx.choices.includes(c.id));
+  showModal(`<p class="modal-kicker">같은 무늬 두 장</p><h2 id="modal-title">먹을 바닥 패를 골라 주세요</h2>${choicePreview(card, tx.stage === 'draw' ? '더미에서 뒤집은 패' : '내가 낸 손패', '이 패로 선택한 바닥 패를 먹습니다.')}${targetOptions(targets, 'choose')}<p class="choice-note">선택한 바닥 패를 함께 가져옵니다.</p>`, 'choice');
 }
 
 function boardCard(id) { return $(`#floor .flower-card[data-id="${id}"]`); }
@@ -395,12 +451,20 @@ async function runPlay(action, { targetId = null, origin = null } = {}) {
   }
 }
 
-async function runChoice(action) {
+async function runChoice(action, targetId = game.bestChoice()) {
   if (animating || modal.open || game.state.phase !== 'choice') return;
   const tx = game.state.pending, handChoice = tx.stage === 'hand';
+  const card = handChoice ? tx.played[0] : tx.drawn;
+  const from = boardCard(card.id)?.getBoundingClientRect();
   if (!action()) return;
   animating = true; renderHand(); renderFloor();
   try {
+    busy(`${tx.player ? '다람이가' : '내가'} 고른 바닥 패에 쳐요`);
+    const element = placeVisualCard(card, targetId);
+    const to = element.getBoundingClientRect();
+    element.classList.add('landing-card');
+    await motion.fly(card, from, to);
+    element.classList.remove('landing-card');
     if (handChoice) await flipDraw(tx);
     await finishMotion(tx);
   } catch (error) {
@@ -421,10 +485,23 @@ function handleAction(action, element) {
       else showModal('<p class="modal-kicker">새로운 운을 만나러</p><h2 id="modal-title">새 판을 시작할까요?</h2><p class="modal-description">진행 중인 판을 마치고 새로 패를 나눠요.<br>이번 판은 전적에 기록되지 않아요.</p><div class="confirm-actions"><button class="secondary-button" data-action="close">이어서 하기</button><button class="primary-button" data-action="restart">새 판 시작</button></div>', 'new');
       break;
     case 'restart': startGame(); break;
-    case 'play': if (started && s.turn === 0 && !modal.open) runPlay(() => game.play(element.dataset.id)); break;
-    case 'choose': if (s.turn === 0 && !modal.open) runChoice(() => game.choose(element.dataset.id)); break;
-    case 'shake': if (!modal.open && s.turn === 0 && game.shake(Number(element.dataset.month))) { toast('흔들기 · ×2'); sound('special'); render(); } break;
-    case 'bomb': if (!modal.open && s.turn === 0) { const c = s.hands[0].find(c => c.month === Number(element.dataset.month)); if (c) runPlay(() => game.play(c.id, { bomb: true })); } break;
+    case 'play': requestPlay(element.dataset.id); break;
+    case 'play-target': {
+      const move = queuedPlay;
+      if (!move || move.game !== game || !modal.open || modal.dataset.kind !== 'play-select') break;
+      const card = s.hands[0].find(c => c.id === move.cardId);
+      if (!card || !game.matches(card.month).some(c => c.id === element.dataset.id)) break;
+      queuedPlay = null; modal.close();
+      runPlay(() => game.play(move.cardId, { bomb: move.bomb }), { targetId: element.dataset.id, origin: move.origin });
+      break;
+    }
+    case 'choose':
+      if (s.turn === 0 && s.phase === 'choice' && (!modal.open || modal.dataset.kind === 'choice')) {
+        if (!s.pending.choices.includes(element.dataset.id)) break;
+        modal.close(); runChoice(() => game.choose(element.dataset.id), element.dataset.id);
+      }
+      break;
+    case 'bomb': if (!modal.open && s.turn === 0) { const c = s.hands[0].find(c => c.month === Number(element.dataset.month)); if (c) requestPlay(c.id, { bomb: true }); } break;
     case 'go': case 'stop':
       if (started && s.turn === 0 && s.phase === 'decision') { modal.close(); game.decide(action === 'go'); sound('go'); render(); }
       break;
@@ -443,7 +520,7 @@ function handleAction(action, element) {
 }
 
 document.addEventListener('click', event => {
-  if (performance.now() < suppressClickUntil) { event.preventDefault(); return; }
+  if (performance.now() < suppressClickUntil && !event.target.closest('#modal')) { event.preventDefault(); return; }
   const button = event.target.closest('[data-action]');
   if (button && !button.disabled) handleAction(button.dataset.action, button);
 });
@@ -479,7 +556,7 @@ function endDrag(event, cancel = false) {
   if (!current.ghost) {
     if (!cancel && event.pointerType === 'touch') {
       event.preventDefault(); suppressClickUntil = performance.now() + 500;
-      runPlay(() => game.play(current.card.id));
+      requestPlay(current.card.id);
     }
     return;
   }
@@ -492,7 +569,7 @@ function endDrag(event, cancel = false) {
   const target = document.elementsFromPoint(event.clientX, event.clientY).map(el => el.closest('#floor .flower-card')).find(Boolean);
   if (target && Number(target.dataset.month) !== current.card.month) { $('#table-message').textContent = '같은 무늬 위나 빈 바닥에 패를 놓아 주세요.'; return; }
   const origin = { left: event.clientX - current.rect.width / 2, top: event.clientY - current.rect.height / 2, width: current.rect.width, height: current.rect.height };
-  runPlay(() => game.play(current.card.id), { targetId: target?.dataset.id, origin });
+  requestPlay(current.card.id, { targetId: target?.dataset.id, origin });
 }
 $('#hand').addEventListener('pointerup', event => endDrag(event));
 $('#hand').addEventListener('pointercancel', event => endDrag(event, true));
@@ -528,7 +605,7 @@ document.addEventListener('keydown', event => {
   else if (started && game.state.turn === 0 && game.state.phase === 'playing' && /^\d$/.test(key)) {
     const index = key === '0' ? 9 : Number(key) - 1;
     const c = game.state.hands[0][index];
-    if (c) { event.preventDefault(); runPlay(() => game.play(c.id)); }
+    if (c) { event.preventDefault(); requestPlay(c.id); }
   }
 });
 
