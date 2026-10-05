@@ -32,16 +32,16 @@
 .flower-card.drop-target{outline:3px solid #f3dd94;box-shadow:0 0 24px #f5da5944}
 .flower-card.landing-card{visibility:hidden}
 .hint-button.selected{background:#b5a75a29;border-color:#e0bf78;color:#f0d391}
-.capture-rack{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 25px;padding:0 8px 14px;min-height:43px}
+.capture-rack{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 25px;padding:0 8px 14px;min-height:64px}
 .capture-pile{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;padding:2px 0;border-radius:5px;background:#072c1912}
 .capture-pile:hover{background:#99bd6c12}
 .capture-pile-label{font-size:9px;color:#aec59f;white-space:nowrap}
 .capture-pile-label b{font-weight:400;color:#e4d3a1;margin-left:4px}
-.capture-fan{display:flex;justify-content:center;align-items:center;min-width:25px;min-height:32px;pointer-events:none}
-.captured-mini{display:block;width:20px;height:30px;border-radius:2px;filter:drop-shadow(1px 2px 1px #00180677);flex-shrink:0}
-.captured-mini+.captured-mini{margin-left:-12px}
+.capture-fan{display:flex;justify-content:center;align-items:center;min-width:32px;min-height:48px;pointer-events:none}
+.captured-mini{display:block;width:32px;height:48px;border-radius:2px;filter:drop-shadow(1px 2px 1px #00180677);flex-shrink:0}
+.captured-mini+.captured-mini{margin-left:-18px}
 .captured-mini svg{width:100%;height:100%;display:block;border-radius:2px}
-.capture-placeholder{width:20px;height:30px;border:1px dashed #98b78033;border-radius:2px}
+.capture-placeholder{width:32px;height:48px;border:1px dashed #98b78033;border-radius:2px}
 #opponent-captures{border-bottom:1px solid #b6d19c12}
 #my-captures{padding-top:1px;padding-bottom:12px}
 .card-flight{position:fixed;left:0;top:0;z-index:1000;pointer-events:none;transform-origin:center;filter:drop-shadow(3px 9px 5px #081a1b77);will-change:transform;perspective:600px}
@@ -64,18 +64,25 @@ main{padding:16px 0}
 @media(min-width:1280px){
   .app-shell{padding:0 32px}
   .game-layout{grid-template-columns:minmax(0,1fr) 300px;gap:24px}
-  .game-panel{--large-floor-card-width:clamp(76px,min(5vw,calc(10dvh - 12px)),96px);--large-hand-card-width:clamp(74px,min(5.833vw,calc(13.333dvh - 32px)),112px);display:flex;flex-direction:column;min-height:calc(100dvh - 104px)}
+  .game-panel{--large-floor-card-width:clamp(76px,min(5vw,calc(10dvh - 12px)),96px);--large-hand-card-width:clamp(74px,min(5.833vw,calc(13.333dvh - 32px)),112px);--captured-card-width:clamp(40px,min(3.333vw,calc(10dvh - 44px)),64px);display:flex;flex-direction:column;min-height:calc(100dvh - 104px)}
   .felt{display:flex;flex-direction:column;flex:1}
-  .table-topline{padding:8px 24px 0;font-size:11px}
-  .opponent-rail{padding:8px 24px}
-  .my-rail{padding:6px 24px}
-  .capture-rack{min-height:48px;padding:0 8px 8px}
+  .table-topline{padding:4px 24px 0;font-size:11px}
+  .opponent-rail,.my-rail{padding:2px 24px}
+  .player-identity>.avatar{width:32px;height:32px}
+  .player-identity>.avatar svg{width:32px;height:32px}
+  .player-identity>div:not(.avatar){display:flex;align-items:center;gap:9px}
+  .player-identity small{margin-top:0}
+  .card-back{width:26px;height:39px}
+  .card-back+.card-back{margin-left:-9px}
+  .capture-rack{min-height:calc(var(--captured-card-width) * 1.5 + 12px);padding:0 8px 8px}
   #my-captures{padding-bottom:8px}
-  .capture-pile-label{font-size:11px}
-  .captured-mini,.capture-placeholder{width:24px;height:36px}
-  .captured-mini+.captured-mini{margin-left:-12px}
-  .capture-fan{min-height:36px}
-  .table-field{flex:1;min-height:calc(var(--large-floor-card-width) * 3 + 64px);padding:10px 16px 30px;gap:40px}
+  .capture-pile{justify-content:flex-start;gap:clamp(8px,.7vw,14px);padding:2px 12px}
+  .capture-pile-label{font-size:13px}
+  .capture-pile-label b{font-weight:600}
+  .captured-mini,.capture-placeholder{width:var(--captured-card-width);height:calc(var(--captured-card-width) * 1.5)}
+  .captured-mini+.captured-mini{margin-left:calc(var(--captured-card-width) * -.55)}
+  .capture-fan{min-width:0;min-height:calc(var(--captured-card-width) * 1.5)}
+  .table-field{flex:1;min-height:calc(var(--large-floor-card-width) * 3 + 44px);padding:10px 16px;gap:40px}
   .floor{--floor-columns:8;--floor-card-width:var(--large-floor-card-width);max-width:1130px;min-height:calc(var(--floor-card-width) * 3 + 24px);gap:24px 20px}
   .floor-slot .floor-month{font-size:10px;bottom:-19px}
   .deck-area{flex-basis:var(--large-floor-card-width)}
@@ -83,7 +90,7 @@ main{padding:16px 0}
   .draw-preview{top:calc(var(--large-floor-card-width) * 1.5 + 41px)}
   .draw-preview .flower-card{--card-width:44px}
   .table-message{font-size:13px}
-  .hand-zone{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 20px;padding:12px 24px 18px;min-height:0}
+  .hand-zone{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 20px;padding:12px 24px 12px;min-height:0}
   .hand-heading{grid-column:1;grid-row:1;margin:0;font-size:11px;align-items:center}
   .hand-heading strong{font-size:11px}
   .hand{grid-column:1/-1;grid-row:2;min-height:0;padding-top:0;gap:clamp(8px,.7vw,14px)}
@@ -93,6 +100,18 @@ main{padding:16px 0}
   .card-key{width:19px;height:21px;font-size:12px}
   .game-toolbar{padding:10px 24px}
 }
+
+/* 바닥 안내는 손패 안내 줄에서 보여 주고 상태 알림은 유지합니다. */
+.table-message,.table-message.choice-message{width:1px;height:1px;min-height:0;padding:0;border:0;clip-path:inset(50%);overflow:hidden;white-space:nowrap}
+@media(max-width:600px){
+  .capture-rack{min-height:62px;padding-bottom:8px}
+  #my-captures{padding-bottom:8px}
+  .capture-pile{flex-direction:column;gap:4px}
+  .captured-mini,.capture-placeholder{width:24px;height:36px}
+  .captured-mini+.captured-mini{margin-left:-16px}
+  .capture-fan{min-height:36px;min-width:0}
+}
+@media(max-width:360px){.captured-mini,.capture-placeholder{width:22px;height:33px}.captured-mini+.captured-mini{margin-left:-17px}.capture-fan{min-height:33px}}
 @media(min-width:1280px) and (max-width:1535px){.floor{--floor-columns:7;gap:24px 16px}.table-field{gap:28px}.deck-area{flex-basis:76px}}
 
 /* 뻑은 패 세 장이 살짝 어긋난 하나의 더미입니다. */

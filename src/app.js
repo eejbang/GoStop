@@ -201,7 +201,7 @@ function render() {
       : s.phase === 'decision' ? `${s.turn === 0 ? '나' : '다람'}의 고·스톱 선택` : hintText || (yourTurn ? '같은 무늬의 패를 모아 보세요' : '다람이가 패를 고르고 있어요');
   $('#table-message').textContent = message;
   $('#table-message').classList.toggle('choice-message', choosing);
-  $('#hand-prompt').textContent = !started ? '준비가 되면 첫 판을 시작해 주세요' : choosing ? '바닥에서 먹을 패를 골라 주세요' : yourTurn ? '패를 누르거나 같은 무늬 위로 끌어 치세요' : s.phase === 'finished' ? '다음 판에도 좋은 패가 들어오길!' : '상대의 패를 기다리는 중';
+  $('#hand-prompt').textContent = !started ? '준비가 되면 첫 판을 시작해 주세요' : choosing ? '팝업에서 먹을 패를 골라 주세요' : yourTurn ? hintText || '패를 누르거나 같은 무늬 위로 끌어 치세요' : s.phase === 'finished' ? '다음 판에도 좋은 패가 들어오길!' : '상대의 패를 기다리는 중';
   $('#turn-label').textContent = !started ? '한 판의 여유를 즐겨 보세요' : s.phase === 'finished' ? '이번 판이 끝났어요' : modal.open ? '잠깐 쉬어 가는 중' : choosing ? '먹을 패를 골라 주세요' : yourTurn ? '내 차례 · 낼 패를 선택해 주세요' : thinking ? '다람이의 차례' : '고 또는 스톱을 선택해 주세요';
   $('#turn-dot').classList.toggle('active', yourTurn || choosing);
   $('#turn-dot').classList.toggle('thinking', thinking && !modal.open);

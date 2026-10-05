@@ -19,6 +19,7 @@ export class TableMotion {
     if (this.reduced) { if (!take) this.sound('slap'); return; }
     const start = point(from), end = point(to);
     const width = take ? from.width : to.width, height = width * 1.5;
+    const captureScale = Math.min(1, to.width / width);
     const ghost = document.createElement('div');
     ghost.className = `card-flight${take ? ' capture-flight' : ''}`;
     ghost.dataset.cardId = card.id;
@@ -39,7 +40,7 @@ export class TableMotion {
       await ghost.animate(take ? [
         { transform: transform(start, 1, 0), opacity: 1 },
         { transform: transform({ x: (start.x + destination.x) / 2, y: (start.y + destination.y) / 2 - 30 }, .9, -8), opacity: 1, offset: .5 },
-        { transform: transform(destination, .35, 4), opacity: .3 },
+        { transform: transform(destination, captureScale, 4), opacity: .3 },
       ] : [
         { transform: transform(start, flip ? 1.1 : from.width / width, -8), filter: 'drop-shadow(0 8px 6px #0006)' },
         { transform: transform({ x: (start.x + destination.x) / 2, y: (start.y + destination.y) / 2 - 24 }, 1.16, 4), offset: .6 },
@@ -63,7 +64,8 @@ export class TableMotion {
     if (!cards.length) return;
     this.sound('collect');
     await Promise.all(cards.map((card, index) => {
-      const target = document.querySelector(`#${player ? 'opponent' : 'my'}-captures [data-type="${card.type}"]`);
+      const pile = document.querySelector(`#${player ? 'opponent' : 'my'}-captures [data-type="${card.type}"]`);
+      const target = pile?.querySelector('.captured-mini:last-child') || pile?.querySelector('.capture-placeholder');
       return this.fly(card, positions.get(card.id), target?.getBoundingClientRect(), { take: true, offset: index % 3 * 2 });
     }));
   }
