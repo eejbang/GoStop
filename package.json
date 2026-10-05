@@ -1,0 +1,9 @@
+{
+  "name": "ohan-matgo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "오후 한 판 — 컴퓨터와 즐기는 2인 맞고",
+  "scripts": { "dev": "node server.mjs", "start": "node server.mjs", "test": "node --test tests/*.test.mjs" },
+  "engines": { "node": ">=20" }
+}
