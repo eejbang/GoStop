@@ -349,9 +349,9 @@ function requestPlay(cardId, { bomb = false, targetId = null, origin = null } = 
     showModal(`<p class="modal-kicker">${card.month}월 세 장 + 바닥 한 장</p><h2 id="modal-title">폭탄으로 한꺼번에 칠까요?</h2><p class="modal-description">손패 세 장으로 바닥 한 장까지 모두 먹습니다.<br>폭탄 뒤집기 두 번이 생깁니다. 상대 피가 있으면 한 장을 가져옵니다.</p><div class="bomb-preview"><div><small>함께 낼 손패</small><div class="bomb-trio">${trio.map(c => cardHTML(c)).join('')}</div></div><span aria-hidden="true">＋</span><div><small>먹을 바닥 패</small>${cardHTML(targets[0])}</div></div>${choicePreview(card, '내가 선택한 손패', '한 장만 내기를 고르면 이 패만 냅니다.')}<div class="bomb-actions"><button type="button" class="primary-button" data-action="play-bomb">폭탄 · 세 장 내기</button><button type="button" class="secondary-button" data-action="play-single">선택한 한 장만 내기</button><button type="button" class="secondary-button" data-action="close">취소</button></div>`, 'bomb-select');
     return;
   }
-  if (!bomb && targets.length >= 2) {
+  if (!bomb && targets.length === 2) {
     queuedPlay = { game, cardId, bomb, origin };
-    showModal(`<p class="modal-kicker">내가 칠 바닥 패</p><h2 id="modal-title">어느 패 위에 칠까요?</h2>${choicePreview(card, '내가 선택한 손패')}${targetOptions(targets, 'play-target')}<p class="choice-note">${targets.length === 3 ? '같은 무늬 세 장은 모두 가져옵니다. 내려칠 위치를 골라 주세요.' : '바닥 패를 누르면 그 패 위에 내려칩니다.'}</p><div class="modal-footer"><button class="secondary-button" data-action="close">취소 · 손패 다시 고르기</button></div>`, 'play-select');
+    showModal(`<p class="modal-kicker">내가 칠 바닥 패</p><h2 id="modal-title">어느 패 위에 칠까요?</h2>${choicePreview(card, '내가 선택한 손패')}${targetOptions(targets, 'play-target')}<p class="choice-note">바닥 패를 누르면 그 패 위에 내려칩니다.</p><div class="modal-footer"><button class="secondary-button" data-action="close">취소 · 손패 다시 고르기</button></div>`, 'play-select');
     return;
   }
   runPlay(() => game.play(cardId, { bomb }), { targetId, origin });
@@ -367,12 +367,12 @@ function showCaptureChoice() {
 function boardCard(id) { return $(`#floor .flower-card[data-id="${id}"]`); }
 
 const turnEffects = new WeakMap();
-async function showTurnEffect(tx, kind) {
-  if (!tx.labels.includes(kind)) return;
+async function showTurnEffect(tx, kind, card = kind === '폭탄' ? tx.played[0] : tx.drawn) {
+  if (kind !== '모아먹기' && !tx.labels.includes(kind)) return;
+  const key = kind === '모아먹기' ? `${kind}:${card.id}` : kind;
   const shown = turnEffects.get(tx) || new Set();
-  if (shown.has(kind)) return;
-  shown.add(kind); turnEffects.set(tx, shown);
-  const card = kind === '폭탄' ? tx.played[0] : tx.drawn;
+  if (shown.has(key)) return;
+  shown.add(key); turnEffects.set(tx, shown);
   const cards = [...$('#floor').querySelectorAll('.flower-card')].filter(el => Number(el.dataset.month) === card.month);
   const anchor = boardCard(card.id)?.getBoundingClientRect() || $('#floor').getBoundingClientRect();
   busy(`${tx.player ? '다람이' : '나'} · ${kind}!`);
@@ -409,6 +409,11 @@ async function flipDraw(tx) {
   element.classList.remove('landing-card');
   visualDeckCount = game.state.deck.length; visualDrawn = tx.drawn;
   renderFloor();
+  // 이미 손패로 먹은 패나 따닥의 세 장과 구분해, 뒤집은 패가 바닥 세 장을 먹을 때만 표시합니다.
+  if (targets.length === 3 && tx.played.every(card => card.month !== tx.drawn.month) &&
+      tx.taken.some(card => card.id === tx.drawn.id) && targets.every(card => tx.taken.some(taken => taken.id === card.id))) {
+    await showTurnEffect(tx, '모아먹기', tx.drawn);
+  }
 }
 
 async function finishMotion(tx) {
@@ -449,7 +454,7 @@ async function runPlay(action, { targetId = null, origin = null } = {}) {
   if (!action()) return;
   const tx = game.state.pending || game.state.lastTurn;
   if (targetId && game.state.phase === 'choice' && tx.stage === 'hand' && tx.choices.includes(targetId)) game.choose(targetId);
-  animating = true; visualTable = previousTable; visualDeckCount = deckCount; visualDrawn = null;
+  animating = true; visualTable = [...previousTable]; visualDeckCount = deckCount; visualDrawn = null;
   renderHand(); renderFloor();
   try {
     busy(`${player ? '다람이가' : '내가'} 바닥에 패를 쳐요`);
@@ -462,6 +467,9 @@ async function runPlay(action, { targetId = null, origin = null } = {}) {
       element.classList.add('landing-card');
       await motion.fly(card, origin || origins.get(card.id), to);
       element.classList.remove('landing-card');
+    }
+    if (tx.played.length === 1 && previousTable.filter(card => card.month === tx.played[0].month).length === 3) {
+      await showTurnEffect(tx, '모아먹기', tx.played[0]);
     }
     await showTurnEffect(tx, '폭탄');
     if (!(game.state.phase === 'choice' && tx.stage === 'hand')) {

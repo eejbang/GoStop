@@ -162,6 +162,8 @@ main{padding:16px 0}
 .effect-ttadak .effect-burst{fill:#164e43d9;filter:drop-shadow(0 0 14px #a4f4df88)}
 .effect-ttadak .effect-stamp strong{-webkit-text-stroke:1px #124c3c}
 .effect-ttadak .effect-ring{border-width:6px}
+.effect-gather .effect-burst{fill:#736124c9;filter:drop-shadow(0 0 14px #ffe2a066)}
+.effect-gather .effect-stamp strong{font-size:44px;white-space:nowrap}
 .effect-static .effect-ring,.effect-static .effect-spark,.effect-static .effect-burst{display:none}
 .effect-static .effect-stamp{border:2px solid currentColor;border-radius:12px;background:#17271cf5;box-shadow:0 4px 30px #0007}
 @media(max-width:600px){
@@ -185,4 +187,5 @@ main{padding:16px 0}
   .bomb-preview small{font-size:9px}
   .bomb-actions{flex-direction:column}
   .effect-stamp strong{font-size:48px}
+  .effect-gather .effect-stamp strong{font-size:36px}
 }

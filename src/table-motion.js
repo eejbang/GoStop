@@ -66,6 +66,7 @@ export class TableMotion {
       '폭탄': { key: 'bomb', caption: '세 장 폭탄!', detail: '같은 월 네 장 획득', color: '#ffcc57' },
       '뻑': { key: 'ppeok', caption: '뻑!', detail: '세 장이 바닥에 남아요', color: '#ff735f' },
       '따닥': { key: 'ttadak', caption: '따닥!', detail: '같은 월 네 장 획득', color: '#a4f4df' },
+      '모아먹기': { key: 'gather', title: '한 번에!', caption: '바닥 세 장 + 한 장', detail: '같은 월 네 장 획득', color: '#ffe2a0' },
     };
     const effect = effects[kind];
     if (!effect || !rect) return;
@@ -79,7 +80,7 @@ export class TableMotion {
     layer.style.left = `${x}px`; layer.style.top = `${y}px`;
     layer.style.setProperty('--effect-color', effect.color);
     const burst = '<svg class="effect-burst" viewBox="0 0 240 240"><path d="M120 4 139 64 184 21 174 83 236 75 191 119 236 163 174 155 184 217 139 174 120 236 101 174 56 217 66 155 4 163 49 119 4 75 66 83 56 21 101 64Z"/></svg>';
-    layer.innerHTML = `${burst}<i class="effect-ring"></i><i class="effect-ring effect-ring-second"></i><div class="effect-stamp"><small>${effect.caption}</small><strong>${kind}${kind === '폭탄' ? '!' : ''}</strong><span>${effect.detail}</span></div>${Array.from({ length: 12 }, (_, i) => `<i class="effect-spark" style="--spark-angle:${i * 30}deg"></i>`).join('')}`;
+    layer.innerHTML = `${burst}<i class="effect-ring"></i><i class="effect-ring effect-ring-second"></i><div class="effect-stamp"><small>${effect.caption}</small><strong>${effect.title || kind}${kind === '폭탄' ? '!' : ''}</strong><span>${effect.detail}</span></div>${Array.from({ length: 12 }, (_, i) => `<i class="effect-spark" style="--spark-angle:${i * 30}deg"></i>`).join('')}`;
     document.body.append(layer);
     this.sound('special');
     try {
